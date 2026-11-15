@@ -1,0 +1,14 @@
+{
+  "name": "ai-hq",
+  "version": "1.0.0",
+  "description": "Dashboard untuk mengelola karyawan AI (OpenAI / Claude)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "UNLICENSED",
+  "private": true
+}

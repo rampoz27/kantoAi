@@ -1,0 +1,384 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI HQ</title>
+<style>
+:root{
+  --bg:#f6f7f9;--panel:#fff;--ink:#14171f;--muted:#667085;--line:#e4e7ec;
+  --accent:#4f46e5;--accent-ink:#fff;--ok:#067647;--ok-bg:#dcfae6;
+  --err:#b42318;--err-bg:#fee4e2;--warn:#93370d;--warn-bg:#fef0c7;--run:#175cd3;--run-bg:#d1e9ff;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --bg:#0e1015;--panel:#171a22;--ink:#eceef3;--muted:#98a2b3;--line:#2a2f3b;
+    --accent:#818cf8;--accent-ink:#0e1015;--ok:#6ce9a6;--ok-bg:#073d29;
+    --err:#fda29b;--err-bg:#4a1713;--warn:#fec84b;--warn-bg:#4a3306;--run:#84caff;--run-bg:#0b2a4d;
+  }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+button,input,select,textarea{font:inherit;color:inherit}
+header{background:var(--panel);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
+.bar{max-width:1080px;margin:0 auto;padding:12px 16px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.brand{font-weight:700;font-size:17px;letter-spacing:-.01em}
+.brand span{color:var(--accent)}
+nav{display:flex;gap:4px;flex:1;flex-wrap:wrap}
+nav button{background:none;border:0;padding:7px 12px;border-radius:8px;cursor:pointer;color:var(--muted);font-weight:500}
+nav button[aria-current=true]{background:var(--bg);color:var(--ink)}
+main{max-width:1080px;margin:0 auto;padding:20px 16px 60px}
+h2{font-size:18px;margin:0 0 14px}
+h3{font-size:14px;margin:0 0 8px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px}
+.grid{display:grid;gap:12px}
+.stats{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+.agents{grid-template-columns:repeat(auto-fill,minmax(280px,1fr))}
+.stat .v{font-size:26px;font-weight:700;letter-spacing:-.02em}
+.stat .l{color:var(--muted);font-size:13px}
+.btn{background:var(--accent);color:var(--accent-ink);border:0;padding:8px 14px;border-radius:8px;cursor:pointer;font-weight:600}
+.btn.ghost{background:none;color:var(--ink);border:1px solid var(--line)}
+.btn.danger{background:none;color:var(--err);border:1px solid var(--line)}
+.btn.sm{padding:4px 10px;font-size:13px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.between{justify-content:space-between}
+.pill{display:inline-block;padding:2px 9px;border-radius:99px;font-size:12px;font-weight:600}
+.pill.done,.pill.ok{background:var(--ok-bg);color:var(--ok)}
+.pill.error{background:var(--err-bg);color:var(--err)}
+.pill.running{background:var(--run-bg);color:var(--run)}
+.pill.off{background:var(--line);color:var(--muted)}
+.muted{color:var(--muted);font-size:13px}
+.empty{padding:32px;text-align:center;color:var(--muted)}
+label{display:block;font-size:13px;font-weight:600;margin:12px 0 4px}
+input,select,textarea{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg)}
+textarea{min-height:90px;resize:vertical}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.three{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+details{border-top:1px solid var(--line);padding:10px 0}
+details:first-child{border-top:0}
+summary{cursor:pointer;display:flex;gap:8px;align-items:center;justify-content:space-between;list-style:none}
+summary::-webkit-details-marker{display:none}
+pre{white-space:pre-wrap;word-break:break-word;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px;margin:8px 0;font:13px/1.5 ui-monospace,Menlo,monospace}
+dialog{border:1px solid var(--line);border-radius:14px;background:var(--panel);color:var(--ink);width:min(560px,94vw);padding:20px}
+dialog::backdrop{background:rgba(0,0,0,.5)}
+.login{max-width:340px;margin:12vh auto}
+.notice{background:var(--warn-bg);color:var(--warn);padding:10px 14px;border-radius:10px;margin-bottom:14px;font-size:14px}
+.log{padding:8px 0;border-top:1px solid var(--line);display:flex;gap:10px;align-items:baseline}
+.log:first-child{border-top:0}
+.log time{color:var(--muted);font-size:12px;white-space:nowrap}
+.hidden{display:none!important}
+@media (max-width:560px){.two,.three{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<div id="login" class="login card hidden">
+  <h2>AI <span style="color:var(--accent)">HQ</span></h2>
+  <div id="setupMsg" class="notice hidden"></div>
+  <form id="loginForm">
+    <label for="pw">Password admin</label>
+    <input id="pw" type="password" autocomplete="current-password" required>
+    <p id="loginErr" class="muted" style="color:var(--err);min-height:1.2em"></p>
+    <button class="btn" style="width:100%">Masuk</button>
+  </form>
+</div>
+
+<div id="app" class="hidden">
+<header><div class="bar">
+  <div class="brand">AI <span>HQ</span></div>
+  <nav id="nav">
+    <button data-tab="ringkasan">Ringkasan</button>
+    <button data-tab="karyawan">Karyawan</button>
+    <button data-tab="tugas">Tugas</button>
+    <button data-tab="aktivitas">Aktivitas</button>
+  </nav>
+  <button class="btn ghost sm" id="logout">Keluar</button>
+</div></header>
+
+<main>
+  <div id="warn"></div>
+
+  <section id="tab-ringkasan">
+    <div id="stats" class="grid stats"></div>
+    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr));margin-top:12px">
+      <div class="card"><h3>Koneksi provider</h3><div id="providers"></div></div>
+      <div class="card"><h3>Tugas terbaru</h3><div id="recent"></div></div>
+    </div>
+  </section>
+
+  <section id="tab-karyawan" class="hidden">
+    <div class="row between" style="margin-bottom:14px">
+      <h2 style="margin:0">Karyawan AI</h2>
+      <button class="btn" id="addAgent">+ Tambah karyawan</button>
+    </div>
+    <div id="agents" class="grid agents"></div>
+  </section>
+
+  <section id="tab-tugas" class="hidden">
+    <div class="card" style="margin-bottom:14px">
+      <h2>Beri tugas baru</h2>
+      <form id="taskForm">
+        <div class="two">
+          <div><label for="tAgent">Karyawan</label><select id="tAgent" required></select></div>
+          <div><label for="tTitle">Judul (opsional)</label><input id="tTitle" maxlength="120"></div>
+        </div>
+        <label for="tInput">Instruksi</label>
+        <textarea id="tInput" required placeholder="Tulis apa yang harus dikerjakan..."></textarea>
+        <div class="row" style="margin-top:12px"><button class="btn" id="tSubmit">Kirim tugas</button><span id="tErr" class="muted" style="color:var(--err)"></span></div>
+      </form>
+    </div>
+    <div class="card" id="tasks"></div>
+  </section>
+
+  <section id="tab-aktivitas" class="hidden">
+    <h2>Log aktivitas</h2>
+    <div class="card" id="logs"></div>
+  </section>
+</main>
+</div>
+
+<dialog id="agentDlg">
+  <form id="agentForm">
+    <h2 id="dlgTitle">Karyawan baru</h2>
+    <div id="templates" class="row" style="margin-bottom:4px"></div>
+    <div class="two">
+      <div><label for="aName">Nama</label><input id="aName" required maxlength="60"></div>
+      <div><label for="aRole">Peran</label><input id="aRole" maxlength="100" placeholder="mis. Customer Support"></div>
+    </div>
+    <div class="two">
+      <div><label for="aProv">Provider</label>
+        <select id="aProv"><option value="anthropic">Anthropic (Claude)</option><option value="openai">OpenAI</option></select></div>
+      <div><label for="aModel">Model</label><input id="aModel" list="models" required maxlength="100">
+        <datalist id="models"><option value="claude-sonnet-5-5"><option value="claude-haiku-5-5"><option value="claude-opus-5-5"><option value="gpt-4o"><option value="gpt-4o-mini"></datalist></div>
+    </div>
+    <label for="aPrompt">Instruksi sistem (kepribadian &amp; aturan kerja)</label>
+    <textarea id="aPrompt" maxlength="8000"></textarea>
+    <div class="three">
+      <div><label for="aMax">Maks. token output</label><input id="aMax" type="number" min="1" max="32000" value="2000"></div>
+      <div><label for="aPin">Harga input / 1jt token (USD)</label><input id="aPin" type="number" min="0" step="any" value="0"></div>
+      <div><label for="aPout">Harga output / 1jt token (USD)</label><input id="aPout" type="number" min="0" step="any" value="0"></div>
+    </div>
+    <p class="muted">Isi harga sesuai halaman harga provider agar estimasi biaya muncul. Biarkan 0 jika tidak perlu.</p>
+    <label class="row" style="font-weight:500"><input id="aActive" type="checkbox" checked style="width:auto"> Aktif</label>
+    <p id="aErr" class="muted" style="color:var(--err)"></p>
+    <div class="row" style="justify-content:flex-end">
+      <button type="button" class="btn ghost" id="aCancel">Batal</button>
+      <button class="btn">Simpan</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+const $ = (s, r = document) => r.querySelector(s);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const PROV = { openai: 'OpenAI', anthropic: 'Anthropic' };
+const TEMPLATES = [
+  { label: 'Customer support', name: 'Sari', role: 'Customer Support', prompt: 'Kamu adalah staf customer support yang ramah dan sabar. Jawab dengan bahasa Indonesia yang jelas dan singkat. Jika tidak yakin, katakan terus terang dan sarankan eskalasi ke manusia.' },
+  { label: 'Penulis konten', name: 'Raka', role: 'Penulis Konten', prompt: 'Kamu adalah penulis konten berpengalaman. Tulis dengan gaya hangat, ringkas, dan mudah dipahami. Selalu tanyakan target pembaca jika belum jelas.' },
+  { label: 'Analis riset', name: 'Dewi', role: 'Analis Riset', prompt: 'Kamu adalah analis riset yang teliti. Susun jawaban dengan struktur: ringkasan, temuan utama, risiko, dan langkah berikutnya. Bedakan fakta dari asumsi.' },
+];
+
+let S = null, tab = 'ringkasan', editingId = null;
+const openTasks = new Set();
+
+async function api(path, opt = {}) {
+  const r = await fetch('/api' + path, {
+    credentials: 'same-origin',
+    ...opt,
+    headers: { 'Content-Type': 'application/json' },
+    body: opt.body ? JSON.stringify(opt.body) : undefined,
+  });
+  const d = await r.json().catch(() => ({}));
+  if (r.status === 401 || (r.status === 503 && d.setup)) { showLogin(d); throw new Error('auth'); }
+  if (!r.ok) throw new Error(d.error || 'Error ' + r.status);
+  return d;
+}
+
+function showLogin(d = {}) {
+  $('#app').classList.add('hidden');
+  $('#login').classList.remove('hidden');
+  const m = $('#setupMsg');
+  if (d.setup) { m.textContent = d.error; m.classList.remove('hidden'); } else m.classList.add('hidden');
+}
+
+$('#loginForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  $('#loginErr').textContent = '';
+  try {
+    await api('/login', { method: 'POST', body: { password: $('#pw').value } });
+    $('#pw').value = '';
+    await boot();
+  } catch (err) { if (err.message !== 'auth') $('#loginErr').textContent = err.message; }
+});
+$('#logout').addEventListener('click', async () => {
+  await fetch('/api/logout', { method: 'POST' });
+  showLogin();
+});
+
+async function refresh() {
+  try { S = await api('/state'); render(); } catch {}
+}
+async function boot() {
+  try {
+    S = await api('/state');
+    $('#login').classList.add('hidden');
+    $('#app').classList.remove('hidden');
+    setTab(tab);
+    render();
+  } catch (e) { if (e.message !== 'auth') console.error(e); }
+}
+setInterval(() => { if (!document.hidden && !$('#app').classList.contains('hidden')) refresh(); }, 4000);
+
+function setTab(t) {
+  tab = t;
+  for (const s of ['ringkasan', 'karyawan', 'tugas', 'aktivitas']) $('#tab-' + s).classList.toggle('hidden', s !== t);
+  for (const b of $('#nav').children) b.setAttribute('aria-current', b.dataset.tab === t);
+}
+$('#nav').addEventListener('click', (e) => { const t = e.target.dataset.tab; if (t) setTab(t); });
+
+const fmtTime = (iso) => iso ? new Date(iso).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' }) : '';
+const fmtNum = (n) => Number(n || 0).toLocaleString('id-ID');
+const fmtUsd = (n) => '$' + Number(n || 0).toFixed(n >= 1 ? 2 : 4);
+const STATUS = { done: 'Selesai', running: 'Berjalan', error: 'Gagal' };
+
+function render() {
+  if (!S) return;
+  const st = S.stats;
+  $('#stats').innerHTML = [
+    [st.activeAgents + '/' + st.agents, 'Karyawan aktif'],
+    [st.done, 'Tugas selesai'],
+    [st.running, 'Sedang berjalan'],
+    [st.failed, 'Tugas gagal'],
+    [fmtNum(st.tokens), 'Total token'],
+    [fmtUsd(st.cost), 'Estimasi biaya'],
+  ].map(([v, l]) => `<div class="card stat"><div class="v">${esc(v)}</div><div class="l">${l}</div></div>`).join('');
+
+  $('#providers').innerHTML = Object.keys(PROV).map((k) =>
+    `<div class="row between" style="padding:6px 0"><span>${PROV[k]}</span><span class="pill ${S.providers[k] ? 'ok' : 'off'}">${S.providers[k] ? 'Kunci API terpasang' : 'Belum ada kunci'}</span></div>`).join('') +
+    '<p class="muted">Kunci diatur lewat Environment di Render, tidak pernah ditampilkan di sini.</p>';
+
+  const missing = Object.keys(PROV).filter((k) => !S.providers[k] && S.agents.some((a) => a.provider === k));
+  $('#warn').innerHTML = missing.length
+    ? `<div class="notice">Ada karyawan yang memakai ${missing.map((k) => PROV[k]).join(' & ')}, tetapi kunci API-nya belum diset di Render.</div>` : '';
+
+  $('#recent').innerHTML = S.tasks.length
+    ? S.tasks.slice(0, 5).map((t) => `<div class="row between" style="padding:6px 0"><span>${esc(t.title)} <span class="muted">· ${esc(t.agentName)}</span></span><span class="pill ${t.status}">${STATUS[t.status]}</span></div>`).join('')
+    : '<div class="empty">Belum ada tugas.</div>';
+
+  $('#agents').innerHTML = S.agents.length ? S.agents.map((a) => `
+    <div class="card">
+      <div class="row between"><strong>${esc(a.name)}</strong><span class="pill ${a.active ? 'ok' : 'off'}">${a.active ? 'Aktif' : 'Nonaktif'}</span></div>
+      <div class="muted">${esc(a.role) || 'Tanpa peran'}</div>
+      <p class="muted" style="margin:10px 0">${PROV[a.provider]} · ${esc(a.model)}</p>
+      <div class="row">
+        <button class="btn ghost sm" data-act="edit" data-id="${a.id}">Ubah</button>
+        <button class="btn ghost sm" data-act="assign" data-id="${a.id}">Beri tugas</button>
+        <button class="btn danger sm" data-act="del" data-id="${a.id}">Hapus</button>
+      </div>
+    </div>`).join('') : '<div class="card empty" style="grid-column:1/-1">Belum ada karyawan. Klik "Tambah karyawan" untuk mulai.</div>';
+
+  const sel = $('#tAgent'), cur = sel.value;
+  sel.innerHTML = S.agents.filter((a) => a.active).map((a) => `<option value="${a.id}">${esc(a.name)}${a.role ? ' — ' + esc(a.role) : ''}</option>`).join('');
+  if (cur && [...sel.options].some((o) => o.value === cur)) sel.value = cur;
+
+  $('#tasks').innerHTML = S.tasks.length ? S.tasks.map((t) => `
+    <details data-id="${t.id}" ${openTasks.has(t.id) ? 'open' : ''}>
+      <summary>
+        <span><strong>${esc(t.title)}</strong> <span class="muted">· ${esc(t.agentName)} · ${fmtTime(t.createdAt)}</span></span>
+        <span class="pill ${t.status}">${STATUS[t.status]}</span>
+      </summary>
+      <div class="muted" style="margin-top:8px">Instruksi</div><pre>${esc(t.input)}</pre>
+      ${t.status === 'done' ? `<div class="muted">Hasil · ${fmtNum((t.tokensIn || 0) + (t.tokensOut || 0))} token${t.cost ? ' · ' + fmtUsd(t.cost) : ''}</div><pre>${esc(t.output) || '(kosong)'}</pre>` : ''}
+      ${t.status === 'error' ? `<div class="muted">Kesalahan</div><pre>${esc(t.error)}</pre>` : ''}
+      ${t.status === 'running' ? '<div class="muted">Sedang dikerjakan...</div>' : ''}
+      <button class="btn danger sm" data-act="deltask" data-id="${t.id}">Hapus</button>
+    </details>`).join('') : '<div class="empty">Belum ada tugas.</div>';
+
+  $('#logs').innerHTML = S.logs.length ? S.logs.map((l) =>
+    `<div class="log"><time>${fmtTime(l.at)}</time><span class="pill ${l.level === 'ok' ? 'ok' : l.level === 'error' ? 'error' : l.level === 'warn' ? 'off' : 'running'}">${l.level}</span><span>${esc(l.message)}</span></div>`).join('')
+    : '<div class="empty">Belum ada aktivitas.</div>';
+}
+
+$('#tasks').addEventListener('toggle', (e) => {
+  const id = e.target.dataset?.id;
+  if (!id) return;
+  e.target.open ? openTasks.add(id) : openTasks.delete(id);
+}, true);
+
+/* ---- Karyawan ---- */
+const dlg = $('#agentDlg');
+function openAgentDialog(a, tpl) {
+  editingId = a ? a.id : null;
+  $('#dlgTitle').textContent = a ? 'Ubah karyawan' : 'Karyawan baru';
+  $('#templates').classList.toggle('hidden', !!a);
+  $('#aName').value = a?.name || tpl?.name || '';
+  $('#aRole').value = a?.role || tpl?.role || '';
+  $('#aProv').value = a?.provider || 'anthropic';
+  $('#aModel').value = a?.model || (($('#aProv').value === 'openai') ? 'gpt-4o-mini' : 'claude-sonnet-5-5');
+  $('#aPrompt').value = a?.systemPrompt || tpl?.prompt || '';
+  $('#aMax').value = a?.maxTokens ?? 2000;
+  $('#aPin').value = a?.priceIn ?? 0;
+  $('#aPout').value = a?.priceOut ?? 0;
+  $('#aActive').checked = a ? a.active : true;
+  $('#aErr').textContent = '';
+  if (!dlg.open) dlg.showModal();
+}
+$('#templates').innerHTML = '<span class="muted">Mulai dari template:</span>' +
+  TEMPLATES.map((t, i) => `<button type="button" class="btn ghost sm" data-tpl="${i}">${t.label}</button>`).join('');
+$('#templates').addEventListener('click', (e) => {
+  const i = e.target.dataset.tpl;
+  if (i !== undefined) openAgentDialog(null, TEMPLATES[i]);
+});
+$('#aProv').addEventListener('change', () => {
+  const m = $('#aModel').value;
+  if (!m || ['gpt-4o-mini', 'claude-sonnet-5-5'].includes(m)) $('#aModel').value = $('#aProv').value === 'openai' ? 'gpt-4o-mini' : 'claude-sonnet-5-5';
+});
+$('#addAgent').addEventListener('click', () => openAgentDialog(null));
+$('#aCancel').addEventListener('click', () => dlg.close());
+$('#agentForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const body = {
+    name: $('#aName').value, role: $('#aRole').value, provider: $('#aProv').value, model: $('#aModel').value,
+    systemPrompt: $('#aPrompt').value, maxTokens: $('#aMax').value, priceIn: $('#aPin').value,
+    priceOut: $('#aPout').value, active: $('#aActive').checked,
+  };
+  try {
+    await api(editingId ? '/agents/' + editingId : '/agents', { method: editingId ? 'PUT' : 'POST', body });
+    dlg.close();
+    await refresh();
+  } catch (err) { $('#aErr').textContent = err.message; }
+});
+
+$('#agents').addEventListener('click', async (e) => {
+  const { act, id } = e.target.dataset;
+  if (!act) return;
+  const a = S.agents.find((x) => x.id === id);
+  if (act === 'edit') openAgentDialog(a);
+  if (act === 'assign') { setTab('tugas'); $('#tAgent').value = id; $('#tInput').focus(); }
+  if (act === 'del' && confirm(`Hapus karyawan "${a.name}"? Riwayat tugasnya tetap tersimpan.`)) {
+    await api('/agents/' + id, { method: 'DELETE' }); refresh();
+  }
+});
+
+/* ---- Tugas ---- */
+$('#taskForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  $('#tErr').textContent = '';
+  $('#tSubmit').disabled = true;
+  try {
+    const t = await api('/tasks', { method: 'POST', body: { agentId: $('#tAgent').value, title: $('#tTitle').value, input: $('#tInput').value } });
+    $('#tTitle').value = ''; $('#tInput').value = '';
+    openTasks.add(t.id);
+    await refresh();
+  } catch (err) { $('#tErr').textContent = err.message; }
+  $('#tSubmit').disabled = false;
+});
+$('#tasks').addEventListener('click', async (e) => {
+  if (e.target.dataset.act === 'deltask') { await api('/tasks/' + e.target.dataset.id, { method: 'DELETE' }); refresh(); }
+});
+
+boot();
+</script>
+</body>
+</html>

@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: ai-hq
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+    # Agar data tidak hilang saat redeploy/restart, pakai plan berbayar
+    # lalu aktifkan 3 baris di bawah ini dan ganti "plan: free" menjadi "plan: starter".
+    #   disk:
+    #     name: data
+    #     mountPath: /var/data
+    # Lalu tambahkan env var: DATA_DIR=/var/data
