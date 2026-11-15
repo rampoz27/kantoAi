@@ -20,7 +20,15 @@ const MAX_LOGS = 300;
 const PROVIDERS = ['openai', 'anthropic'];
 
 /* ---------- Penyimpanan ---------- */
-function load() {
+// Mode utama: Supabase lewat REST API (tanpa library), data permanen.
+// Mode cadangan: file JSON lokal (hilang saat redeploy di plan gratis Render).
+const SB_URL = (process.env.SUPABASE_URL || '').trim().replace(/\/+$/, '').replace(/\/rest\/v1$/, '');
+const SB_KEY = (process.env.SUPABASE_SERVICE_KEY || '').trim();
+const USE_SB = !!(SB_URL && SB_KEY);
+let storageError = '';
+let state = { agents: [], tasks: [], logs: [] };
+
+function loadFile() {
   try {
     const s = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
     return { agents: s.agents || [], tasks: s.tasks || [], logs: s.logs || [] };
@@ -28,18 +36,77 @@ function load() {
     return { agents: [], tasks: [], logs: [] };
   }
 }
-let state = load();
 
-function save() {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-  const tmp = DATA_FILE + '.tmp';
-  fs.writeFileSync(tmp, JSON.stringify(state));
-  fs.renameSync(tmp, DATA_FILE);
+function saveFile() {
+  try {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+    const tmp = DATA_FILE + '.tmp';
+    fs.writeFileSync(tmp, JSON.stringify(state));
+    fs.renameSync(tmp, DATA_FILE);
+    storageError = '';
+  } catch (e) {
+    storageError = String(e.message || e).slice(0, 300);
+    console.error('Penyimpanan file gagal:', storageError);
+  }
+}
+
+async function sb(method, query, body, extra = {}) {
+  const headers = { apikey: SB_KEY, 'Content-Type': 'application/json', ...extra };
+  if (SB_KEY.startsWith('eyJ')) headers.Authorization = 'Bearer ' + SB_KEY; // kunci format lama (JWT)
+  const res = await fetch(`${SB_URL}/rest/v1/${query}`, {
+    method,
+    headers,
+    body: body === undefined ? undefined : JSON.stringify(body),
+    signal: AbortSignal.timeout(15000),
+  });
+  const text = await res.text();
+  if (!res.ok) throw new Error(`Supabase ${res.status}: ${text.slice(0, 300)}`);
+  return text ? JSON.parse(text) : null;
+}
+
+// Semua penulisan ke Supabase diantre agar urutannya tetap benar.
+let chain = Promise.resolve();
+function enqueue(job) {
+  chain = chain.then(job).then(
+    () => { storageError = ''; },
+    (e) => { storageError = String(e.message || e).slice(0, 300); console.error('Penyimpanan Supabase gagal:', storageError); }
+  );
+  return chain;
+}
+
+function put(table, obj) {
+  if (!USE_SB) return saveFile();
+  const row = { id: obj.id, data: obj, created_at: obj.createdAt || obj.at || new Date().toISOString() };
+  return enqueue(() => sb('POST', `${table}?on_conflict=id`, row, { Prefer: 'resolution=merge-duplicates,return=minimal' }));
+}
+
+function remove(table, id) {
+  if (!USE_SB) return saveFile();
+  return enqueue(() => sb('DELETE', `${table}?id=eq.${encodeURIComponent(id)}`, undefined, { Prefer: 'return=minimal' }));
+}
+
+async function loadState() {
+  if (!USE_SB) return loadFile();
+  const [agents, tasks, logs] = await Promise.all([
+    sb('GET', 'agents?select=data&order=created_at.asc&limit=1000'),
+    sb('GET', `tasks?select=data&order=created_at.desc&limit=${MAX_TASKS}`),
+    sb('GET', `logs?select=data&order=created_at.desc&limit=${MAX_LOGS}`),
+  ]);
+  return {
+    agents: agents.map((r) => r.data),
+    tasks: tasks.map((r) => r.data),
+    logs: logs.map((r) => r.data),
+  };
 }
 
 function log(message, level = 'info') {
-  state.logs.unshift({ id: uid(), at: new Date().toISOString(), level, message });
-  if (state.logs.length > MAX_LOGS) state.logs.length = MAX_LOGS;
+  const entry = { id: uid(), at: new Date().toISOString(), level, message };
+  state.logs.unshift(entry);
+  put('logs', entry);
+  if (state.logs.length > MAX_LOGS) {
+    const old = state.logs.pop();
+    remove('logs', old.id);
+  }
 }
 
 function uid() {
@@ -47,14 +114,16 @@ function uid() {
 }
 
 // Tugas yang masih "running" saat server mati tidak akan pernah selesai.
-for (const t of state.tasks) {
-  if (t.status === 'running') {
-    t.status = 'error';
-    t.error = 'Server restart saat tugas berjalan.';
-    t.finishedAt = new Date().toISOString();
+function recoverStuckTasks() {
+  for (const t of state.tasks) {
+    if (t.status === 'running') {
+      t.status = 'error';
+      t.error = 'Server restart saat tugas berjalan.';
+      t.finishedAt = new Date().toISOString();
+      put('tasks', t);
+    }
   }
 }
-save();
 
 /* ---------- Auth ---------- */
 function sessionToken() {
@@ -202,7 +271,7 @@ async function runTask(task, agent) {
     log(`${agent.name} gagal mengerjakan "${task.title}": ${task.error}`, 'error');
   }
   task.finishedAt = new Date().toISOString();
-  save();
+  put('tasks', task);
 }
 
 /* ---------- API ---------- */
@@ -259,6 +328,7 @@ async function handleApi(req, res, url) {
       tasks: state.tasks.slice(0, 100),
       logs: state.logs.slice(0, 100),
       stats: stats(),
+      storage: { mode: USE_SB ? 'supabase' : 'file', error: storageError },
       providers: {
         openai: !!process.env.OPENAI_API_KEY,
         anthropic: !!process.env.ANTHROPIC_API_KEY,
@@ -270,7 +340,7 @@ async function handleApi(req, res, url) {
     const agent = { id: uid(), createdAt: new Date().toISOString(), ...cleanAgent(await readBody(req)) };
     state.agents.push(agent);
     log(`Karyawan baru ditambahkan: ${agent.name}`);
-    save();
+    put('agents', agent);
     return send(res, 201, agent);
   }
 
@@ -282,13 +352,13 @@ async function handleApi(req, res, url) {
       const old = state.agents[idx];
       state.agents[idx] = { ...old, ...cleanAgent(await readBody(req)) };
       log(`Karyawan diperbarui: ${state.agents[idx].name}`);
-      save();
+      put('agents', state.agents[idx]);
       return send(res, 200, state.agents[idx]);
     }
     if (method === 'DELETE') {
       const [gone] = state.agents.splice(idx, 1);
       log(`Karyawan dihapus: ${gone.name}`, 'warn');
-      save();
+      remove('agents', gone.id);
       return send(res, 200, { ok: true });
     }
   }
@@ -310,9 +380,12 @@ async function handleApi(req, res, url) {
       createdAt: new Date().toISOString(),
     };
     state.tasks.unshift(task);
-    if (state.tasks.length > MAX_TASKS) state.tasks.length = MAX_TASKS;
+    put('tasks', task);
+    if (state.tasks.length > MAX_TASKS) {
+      const old = state.tasks.pop();
+      remove('tasks', old.id);
+    }
     log(`Tugas baru untuk ${agent.name}: "${task.title}"`);
-    save();
     runTask(task, agent); // berjalan di latar belakang; frontend polling
     return send(res, 202, task);
   }
@@ -322,7 +395,7 @@ async function handleApi(req, res, url) {
     const idx = state.tasks.findIndex((t) => t.id === m[1]);
     if (idx < 0) return send(res, 404, { error: 'Tugas tidak ditemukan.' });
     state.tasks.splice(idx, 1);
-    save();
+    remove('tasks', m[1]);
     return send(res, 200, { ok: true });
   }
 
@@ -404,7 +477,16 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-server.listen(PORT, () => {
-  console.log(`AI HQ berjalan di port ${PORT}`);
-  if (!ADMIN_PASSWORD) console.warn('PERINGATAN: ADMIN_PASSWORD belum diset, API dikunci.');
-});
+(async () => {
+  try {
+    state = await loadState();
+  } catch (e) {
+    console.error('Gagal memuat data dari Supabase. Cek SUPABASE_URL, SUPABASE_SERVICE_KEY, dan apakah supabase/schema.sql sudah dijalankan.\n' + e.message);
+    process.exit(1);
+  }
+  recoverStuckTasks();
+  server.listen(PORT, () => {
+    console.log(`AI HQ berjalan di port ${PORT} (penyimpanan: ${USE_SB ? 'Supabase' : 'file lokal'})`);
+    if (!ADMIN_PASSWORD) console.warn('PERINGATAN: ADMIN_PASSWORD belum diset, API dikunci.');
+  });
+})();
