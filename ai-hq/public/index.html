@@ -256,11 +256,14 @@ function render() {
 
   $('#providers').innerHTML = Object.keys(PROV).map((k) =>
     `<div class="row between" style="padding:6px 0"><span>${PROV[k]}</span><span class="pill ${S.providers[k] ? 'ok' : 'off'}">${S.providers[k] ? 'Kunci API terpasang' : 'Belum ada kunci'}</span></div>`).join('') +
+    `<div class="row between" style="padding:6px 0"><span>Penyimpanan data</span><span class="pill ${S.storage.mode === 'supabase' && !S.storage.error ? 'ok' : 'error'}">${S.storage.mode === 'supabase' ? (S.storage.error ? 'Supabase bermasalah' : 'Supabase terhubung') : 'File lokal (sementara)'}</span></div>` +
     '<p class="muted">Kunci diatur lewat Environment di Render, tidak pernah ditampilkan di sini.</p>';
 
   const missing = Object.keys(PROV).filter((k) => !S.providers[k] && S.agents.some((a) => a.provider === k));
-  $('#warn').innerHTML = missing.length
-    ? `<div class="notice">Ada karyawan yang memakai ${missing.map((k) => PROV[k]).join(' & ')}, tetapi kunci API-nya belum diset di Render.</div>` : '';
+  $('#warn').innerHTML =
+    (S.storage.mode !== 'supabase' ? '<div class="notice">Penyimpanan masih file lokal: data akan hilang saat Render deploy ulang atau restart. Hubungkan Supabase (lihat README).</div>' : '') +
+    (S.storage.error ? `<div class="notice" style="background:var(--err-bg);color:var(--err)">Gagal menyimpan data: ${esc(S.storage.error)}</div>` : '') +
+    (missing.length ? `<div class="notice">Ada karyawan yang memakai ${missing.map((k) => PROV[k]).join(' & ')}, tetapi kunci API-nya belum diset di Render.</div>` : '');
 
   $('#recent').innerHTML = S.tasks.length
     ? S.tasks.slice(0, 5).map((t) => `<div class="row between" style="padding:6px 0"><span>${esc(t.title)} <span class="muted">· ${esc(t.agentName)}</span></span><span class="pill ${t.status}">${STATUS[t.status]}</span></div>`).join('')
